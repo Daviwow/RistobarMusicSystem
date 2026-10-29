@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Musica Showroom</title>
+<style>
+:root{color-scheme:dark;--bg:#14161a;--card:#1e2127;--tx:#f1f1f1;--mu:#9aa0a8;--ac:#4cc38a;--rd:#e5604d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,sans-serif;padding:16px;max-width:640px;margin:auto}
+.card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px}
+h2{font-size:14px;color:var(--mu);margin:0 0 10px;text-transform:uppercase;letter-spacing:.05em}
+#clock{font-size:56px;font-weight:700;text-align:center}
+#status{text-align:center;font-size:20px;margin-top:4px}
+#next{text-align:center;color:var(--mu);margin-top:4px}
+button,label.btn{background:#2d323b;color:var(--tx);border:0;border-radius:10px;padding:12px 16px;font-size:16px;cursor:pointer;display:inline-block}
+button.main{background:var(--ac);color:#06210f;font-weight:700;width:100%;font-size:20px;padding:18px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.track{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #2d323b}
+.track.on{color:var(--ac)}
+.track button{padding:6px 10px;background:none;color:var(--rd)}
+@keyframes fl{from{background:#b3261e}to{background:#6d0f0a}}
+input[type=number]{background:#2d323b;color:var(--tx);border:0;border-radius:8px;padding:8px;font-size:16px;width:70px}
+input[type=time]{background:#2d323b;color:var(--tx);border:0;border-radius:8px;padding:8px;font-size:16px}
+input[type=range]{width:100%}
+.days label{margin-right:10px;white-space:nowrap}
+#warn{background:var(--rd);color:#fff;text-align:center;padding:12px;border-radius:10px;margin-bottom:14px;display:none}
+</style>
+</head>
+<body>
+<div id="warn">Tocca lo schermo per attivare l’audio</div>
+<div class="card">
+  <div id="clock">--:--</div>
+  <div id="status">…</div>
+  <div id="next"></div>
+  <div id="nxa" style="text-align:center;color:var(--mu);font-size:14px;margin-top:2px"></div>
+  <canvas id="viz" height="56" style="width:100%;height:56px;margin-top:10px"></canvas>
+  <div id="bat" style="text-align:center;color:var(--mu);font-size:13px;margin-top:6px"></div>
+</div>
+<div class="card" id="armcard">
+  <button class="main" id="arm">▶ Attiva (da fare una volta)</button>
+  <div id="armed" style="display:none;text-align:center;color:var(--ac)">✔ Attivo · schermo tenuto acceso</div>
+</div>
+<div class="card">
+  <h2>Controllo manuale</h2>
+  <div class="row">
+    <button id="bplay">▶ Play</button>
+    <button id="bstop">⏸ Pausa</button>
+    <button id="bnext">⏭ Avanti</button>
+    <button id="bshuf"></button>
+    <button id="bviz"></button>
+  </div>
+  <p style="color:var(--mu);font-size:13px;margin:10px 0 0">Il comando manuale vale fino al prossimo orario programmato.</p>
+</div>
+<div class="card">
+  <h2>Musica (in loop)</h2>
+  <div id="list"></div>
+  <p><label class="btn">＋ Aggiungi file audio<input id="file" type="file" accept="audio/*" multiple hidden></label></p>
+</div>
+<div class="card">
+  <h2>Annunci</h2>
+  <div id="anns"></div>
+  <div class="row" style="margin-top:12px">Showroom ogni ora dalle <input type="time" id="sf"> alle <input type="time" id="st"></div>
+  <h2 style="margin-top:16px">Volume annunci</h2><input type="range" id="avol" min="0" max="1" step="0.01">
+  <h2 style="margin-top:16px">Musica durante gli annunci</h2><input type="range" id="duck" min="0" max="1" step="0.01">
+</div>
+<div class="card">
+  <h2>Orari</h2>
+  <div class="row">Accendi <input type="time" id="start"> Spegni <input type="time" id="end"></div>
+  <div class="days" id="days" style="margin-top:12px"></div>
+  <div class="row" style="margin-top:12px">Schermo scuro dopo <input type="number" id="dim" min="0" max="60"> min (0 = mai)</div>
+  <h2 style="margin-top:16px">Volume</h2>
+  <input type="range" id="vol" min="0" max="1" step="0.01">
+</div>
+<div class="card">
+  <h2>Sicurezza</h2>
+  <div class="row"><button id="bsec"></button><button id="btest">🔔 Prova allarme</button><button id="bpin">🔑 PIN</button></div>
+  <div id="secst" style="color:var(--mu);font-size:13px;margin:10px 0"></div>
+  Sensibilità <input type="range" id="sens" min="1" max="10" step="1">
+</div>
+<div class="card"><h2>Registro</h2><div id="log" style="font-size:13px;color:var(--mu)"></div></div>
+<div id="sv" style="display:none;position:fixed;inset:0;background:#000;z-index:9;align-items:center;justify-content:center;flex-direction:column"><div id="svc" style="font-size:64px;font-weight:700;color:#333"></div><div id="svs" style="color:#2a2a2a;margin-top:6px"></div></div>
+<div id="alr" oncontextmenu="return false" style="display:none;position:fixed;inset:0;z-index:20;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:20px;user-select:none;touch-action:none;animation:fl .6s infinite alternate"><div style="font-size:48px;font-weight:800">🚨 ALLARME</div><div style="font-size:20px;margin:10px 0 30px">Questo tablet non va spostato</div><button id="hold" style="background:#0004;color:#fff;border:2px solid #fff;font-size:20px;padding:22px 30px">Tieni premuto 2 secondi per fermare</button></div>
+<audio id="al" src="alarm.mp3" preload="auto" loop></audio>
+<audio id="au" preload="auto"></audio>
+<audio id="an" preload="auto"></audio>
+<script>
+const $=id=>document.getElementById(id), au=$('au'),an=$('an'),al=$('al');
+const DAYS=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+let S={start:'10:00',end:'19:00',days:[1,2,3,4,5,6],vol:0.8,sec:false,sens:5,pin:'1234',dim:3,shuf:false,viz:false,avol:1,duck:0.2,open:'10:10',sf:'11:00',st:'18:00',clos:'18:50'};
+try{Object.assign(S,JSON.parse(localStorage.getItem('sm')||'{}'))}catch(e){}
+let LOG=[];try{LOG=JSON.parse(localStorage.getItem('smlog')||'[]')}catch(e){}
+function renderLog(){$('log').innerHTML='';LOG.slice(0,12).forEach(l=>{const d=document.createElement('div');d.textContent=l;$('log').append(d)})}
+function log(t){LOG.unshift(new Date().toLocaleString('it-IT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' · '+t);LOG=LOG.slice(0,30);try{localStorage.setItem('smlog',JSON.stringify(LOG))}catch(e){}renderLog()}
+const save=()=>{try{localStorage.setItem('sm',JSON.stringify(S))}catch(e){}};
+
+// --- archivio file (IndexedDB) ---
+const open=()=>new Promise((ok,ko)=>{const r=indexedDB.open('showroom',1);r.onupgradeneeded=()=>r.result.createObjectStore('t',{keyPath:'id',autoIncrement:true});r.onsuccess=()=>ok(r.result);r.onerror=()=>ko(r.error)});
+async function store(mode,fn){const d=await open();return new Promise((ok,ko)=>{const t=d.transaction('t',mode);const q=fn(t.objectStore('t'));t.oncomplete=()=>ok(q&&q.result);t.onerror=()=>ko(t.error)})}
+
+let alarmOn=false,secT=0,ref=null,g=null,shN=0,tiltN=0,lastMo=0,sirenI=null,sirenO=null,sc=null,holdT=null,wasP=false,lastT=-1,stall=0,svOn=false,idleT=Date.now(),lastMin=-1,ac,an2,vb;
+let all=[],tracks=[],idx=0,armed=false,override=null,lastSched=null,blocked=false;
+
+async function load(){
+  try{all=(await store('readonly',s=>s.getAll()))||[]}catch(e){all=[]}
+  tracks=all.filter(t=>!t.kind||t.kind==='music');
+  idx=Math.min(idx,Math.max(0,tracks.length-1));
+  renderList();renderAnn();setSrc(false);
+}
+function setSrc(play,fade){
+  if(!tracks.length){au.removeAttribute('src');return}
+  tracks.forEach(t=>{if(!t.url)t.url=URL.createObjectURL(t.blob)});
+  au.loop=tracks.length===1;
+  if(au.dataset.id!=tracks[idx].id){au.src=tracks[idx].url;au.dataset.id=tracks[idx].id}
+  if(play)tryPlay(fade);
+}
+function renderList(){
+  $('list').innerHTML=tracks.length?'':'<span style="color:var(--mu)">Nessun brano caricato</span>';
+  tracks.forEach((t,i)=>{
+    const d=document.createElement('div');d.className='track'+(i===idx?' on':'');
+    const n=document.createElement('span');n.textContent=t.name;
+    const b=document.createElement('button');b.textContent='✕';
+    b.onclick=async()=>{await store('readwrite',s=>s.delete(t.id));au.dataset.id='';await load()};
+    d.append(n,b);$('list').append(d);
+  });
+}
+$('file').onchange=async e=>{
+  for(const f of e.target.files)await store('readwrite',s=>s.add({name:f.name,blob:f,kind:'music'}));
+  e.target.value='';await load();
+  try{navigator.storage.persist()}catch(x){}
+};
+function next(){if(!tracks.length)return;if(S.shuf&&tracks.length>1){let j;do{j=Math.floor(Math.random()*tracks.length)}while(j===idx);idx=j}else idx=(idx+1)%tracks.length;
+  au.dataset.id='';setSrc(true);renderList()}
+au.onended=next;au.onerror=()=>setTimeout(next,1500);
+
+// --- riproduzione ---
+function tryPlay(fade){
+  if(!tracks.length)return;
+  const f=fade&&au.paused;if(f)au.volume=0;
+  au.play().then(()=>{blocked=false;if(f)fadeTo(musicVol(),4000)}).catch(()=>{blocked=true;au.volume=musicVol()});
+}
+function fadeStop(){
+  const v=au.volume;let n=10;
+  const i=setInterval(()=>{n--;au.volume=Math.max(0,v*n/10);if(n<=0){clearInterval(i);au.pause();au.volume=musicVol()}},150);
+}
+
+// --- annunci + ducking ---
+const fired=new Set(),annQ=[];let annBusy=false,ramp=null,ducked=false;
+const musicVol=()=>alarmOn?0:S.vol*(ducked?S.duck:1);
+function fadeTo(v,ms=600){
+  clearInterval(ramp);const a=au.volume,n=20;let i=0;
+  ramp=setInterval(()=>{i++;au.volume=Math.min(1,Math.max(0,a+(v-a)*i/n));if(i>=n)clearInterval(ramp)},ms/n);
+}
+function queueAnn(k){const r=all.find(t=>t.kind===k);if(!r||alarmOn)return;annQ.push(r);runAnn()}
+function runAnn(){
+  if(annBusy||!annQ.length)return;annBusy=true;
+  const r=annQ.shift();if(!r.url)r.url=URL.createObjectURL(r.blob);
+  log('Annuncio '+({open:'apertura',show:'showroom',close:'chiusura'}[r.kind]||r.kind));an.src=r.url;an.volume=S.avol;ducked=true;fadeTo(musicVol());
+  setTimeout(()=>an.play().catch(endAnn),700);
+}
+function endAnn(){annBusy=false;if(annQ.length)runAnn();else{ducked=false;fadeTo(musicVol())}}
+an.onended=endAnn;an.onerror=endAnn;
+const ANN=[['open','Apertura','open'],['show','Showroom',null],['close','Chiusura','clos']];
+function renderAnn(){
+  $('anns').innerHTML='';
+  ANN.forEach(([k,label,tk])=>{
+    const r=all.find(t=>t.kind===k),d=document.createElement('div');
+    d.className='track';d.style.flexWrap='wrap';d.style.gap='6px';
+    const n=document.createElement('span');n.innerHTML='<b></b> <small style="color:var(--mu)"></small>';
+    n.firstChild.textContent=label;n.lastChild.textContent=r?r.name:'nessun file';
+    const box=document.createElement('span');box.className='row';
+    if(tk){const t=document.createElement('input');t.type='time';t.value=S[tk];t.onchange=()=>{S[tk]=t.value;save()};box.append(t)}
+    const up=document.createElement('label');up.className='btn';up.textContent='File';
+    const f=document.createElement('input');f.type='file';f.accept='audio/*';f.hidden=true;
+    f.onchange=async()=>{const fl=f.files[0];if(!fl)return;if(r)await store('readwrite',s=>s.delete(r.id));await store('readwrite',s=>s.add({name:fl.name,blob:fl,kind:k}));await load()};
+    up.append(f);
+    const pb=document.createElement('button');pb.textContent='▶';pb.style.color='var(--ac)';pb.onclick=()=>queueAnn(k);
+    const x=document.createElement('button');x.textContent='✕';x.onclick=async()=>{if(r){await store('readwrite',s=>s.delete(r.id));await load()}};
+    box.append(up,pb,x);d.append(n,box);$('anns').append(d);
+  });
+}
+
+// --- extra: prossimo annuncio, schermo scuro, visualizzatore ---
+const pad=x=>String(x).padStart(2,'0');
+function nextAnn(){
+  const n=new Date(),m=n.getHours()*60+n.getMinutes(),L=[];
+  if(!S.days.includes(n.getDay()))return '';
+  if(all.some(t=>t.kind==='open'))L.push([mins(S.open),'Apertura']);
+  if(all.some(t=>t.kind==='close'))L.push([mins(S.clos),'Chiusura']);
+  if(all.some(t=>t.kind==='show'))for(let x=mins(S.sf);x<=mins(S.st);x+=60)L.push([x,'Showroom']);
+  const f=L.filter(a=>a[0]>m).sort((a,b)=>a[0]-b[0])[0];
+  return f?`📢 Prossimo annuncio: ${f[1]} alle ${pad(f[0]/60|0)}:${pad(f[0]%60)}`:'';
+}
+function sv(on){svOn=on;$('sv').style.display=on?'flex':'none'}
+['click','touchstart','keydown'].forEach(e=>document.addEventListener(e,()=>{idleT=Date.now();if(svOn)sv(false)},true));
+function initViz(){try{ac=new(window.AudioContext||window.webkitAudioContext)();an2=ac.createAnalyser();an2.fftSize=64;
+  ac.createMediaElementSource(au).connect(an2);an2.connect(ac.destination);ac.createMediaElementSource(an).connect(ac.destination);
+  vb=new Uint8Array(an2.frequencyBinCount)}catch(e){}}
+const cv=$('viz'),cx=cv.getContext('2d');
+function draw(){requestAnimationFrame(draw);
+  if(cv.width!==cv.clientWidth)cv.width=cv.clientWidth;
+  const w=cv.width,h=cv.height;cx.clearRect(0,0,w,h);
+  if(!S.viz||!an2||au.paused||document.hidden||svOn)return;
+  an2.getByteFrequencyData(vb);const bw=w/vb.length;cx.fillStyle='#4cc38a';
+  vb.forEach((v,i)=>{const bh=v/255*h;cx.fillRect(i*bw+2,h-bh,bw-4,bh)});
+}
+function lab(){$('bshuf').textContent='🔀 Casuale: '+(S.shuf?'sì':'no');$('bviz').textContent='📊 Visualizzatore: '+(S.viz?'sì':'no');$('bsec').textContent='🔒 Antifurto: '+(S.sec?'sì':'no')}
+$('bshuf').onclick=()=>{S.shuf=!S.shuf;save();lab()};
+$('bviz').onclick=()=>{S.viz=!S.viz;if(S.viz&&!ac)initViz();if(ac)ac.resume();save();lab()};
+$('dim').value=S.dim;$('dim').onchange=e=>{S.dim=+e.target.value||0;save()};
+if(navigator.getBattery)navigator.getBattery().then(b=>{
+  const u=()=>{$('bat').textContent=`🔋 ${Math.round(b.level*100)}% · ${b.charging?'in carica ⚡':'NON in carica ⚠'}`;$('bat').style.color=!b.charging&&b.level<.5?'var(--rd)':'var(--mu)'};
+  u();b.onlevelchange=u;b.onchargingchange=()=>{u();if(!b.charging&&S.sec&&armed&&Date.now()>secT)alarm('Caricatore scollegato');log(b.charging?'Caricatore collegato':'Caricatore scollegato!')}}).catch(()=>{});
+// --- antifurto ---
+function secArm(){ref=null;shN=tiltN=0;secT=Date.now()+15000;log('Antifurto: si arma tra 15s')}
+window.addEventListener('devicemotion',e=>{
+  const a=e.accelerationIncludingGravity;if(!a||a.x==null)return;
+  lastMo=Date.now();const v=[a.x,a.y,a.z];if(!g)g=v.slice();
+  const shock=Math.hypot(v[0]-g[0],v[1]-g[1],v[2]-g[2]);
+  g=g.map((x,i)=>x*0.9+v[i]*0.1);
+  if(!S.sec||!armed||alarmOn||Date.now()<secT)return;
+  if(!ref){ref=g.slice();return}
+  const ang=Math.acos(Math.min(1,(g[0]*ref[0]+g[1]*ref[1]+g[2]*ref[2])/(Math.hypot(...g)*Math.hypot(...ref))))*57.3;
+  shN=shock>1.6-0.14*S.sens?shN+1:0;tiltN=ang>12-S.sens?tiltN+1:0;
+  if(shN>=3)alarm('Urto o movimento');else if(tiltN>=30)alarm('Tablet sollevato o inclinato');
+});
+function siren(on){
+  clearInterval(sirenI);try{sirenO&&sirenO.stop()}catch(e){}sirenO=null;if(!on)return;
+  try{sc=sc||new(window.AudioContext||window.webkitAudioContext)();sirenO=sc.createOscillator();sirenO.type='square';
+    sirenO.connect(sc.destination);sirenO.start();let f=0;sirenI=setInterval(()=>{sirenO.frequency.value=f++%2?900:1400},350)}catch(e){}
+}
+function alarm(why){
+  if(alarmOn)return;alarmOn=true;log('🚨 ALLARME: '+why);
+  annQ.length=0;an.pause();annBusy=false;fadeTo(0,300);sv(false);
+  $('alr').style.display='flex';al.volume=1;al.currentTime=0;al.play().catch(()=>siren(true));
+  try{navigator.vibrate([500,200,500,200,500])}catch(e){}
+}
+al.onerror=()=>{if(alarmOn)siren(true)};
+function unlock(){
+  if(S.pin&&prompt('PIN per fermare l’allarme')!==S.pin){log('PIN errato');return}
+  alarmOn=false;al.pause();siren(false);$('alr').style.display='none';fadeTo(musicVol(),1500);log('Allarme fermato');secArm();
+}
+const hb=$('hold');
+hb.addEventListener('pointerdown',()=>{holdT=setTimeout(unlock,2000)});
+['pointerup','pointerleave','pointercancel'].forEach(e=>hb.addEventListener(e,()=>clearTimeout(holdT)));
+$('bsec').onclick=()=>{
+  if(S.sec){if(S.pin&&prompt('PIN per disattivare l’antifurto')!==S.pin)return;S.sec=false;log('Antifurto disattivato')}
+  else{S.sec=true;log('Antifurto attivato');if(armed)secArm()}
+  save();lab()};
+$('btest').onclick=()=>alarm('Prova');
+$('bpin').onclick=()=>{
+  if(S.pin&&prompt('PIN attuale')!==S.pin)return;
+  const n=prompt('Nuovo PIN (vuoto = nessun PIN)');if(n===null)return;S.pin=n.trim();save();log('PIN cambiato')};
+$('sens').value=S.sens;$('sens').oninput=e=>{S.sens=+e.target.value;save();secArm()};
+lab();renderLog();draw();
+
+// --- orari ---
+const mins=s=>{const[a,b]=s.split(':').map(Number);return a*60+b};
+function inWindow(d=new Date()){
+  const m=d.getHours()*60+d.getMinutes();
+  return S.days.includes(d.getDay())&&m>=mins(S.start)&&m<mins(S.end);
+}
+function nextStart(){
+  const n=new Date();
+  for(let k=0;k<8;k++){
+    const d=new Date(n);d.setDate(n.getDate()+k);
+    if(!S.days.includes(d.getDay()))continue;
+    const [h,m]=S.start.split(':').map(Number);d.setHours(h,m,0,0);
+    if(d>n)return k===0?`oggi alle ${S.start}`:k===1?`domani alle ${S.start}`:`${DAYS[d.getDay()]} alle ${S.start}`;
+  }
+  return '—';
+}
+function tick(){
+  const now=new Date(),sched=inWindow(now);
+  $('clock').textContent=now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  if(sched!==lastSched){override=null;lastSched=sched}
+  if(armed&&sched){
+    const m=now.getHours()*60+now.getMinutes(),day=now.toDateString(),due=[];
+    if(m===mins(S.open))due.push('open');
+    if(m===mins(S.clos))due.push('close');
+    if(m>=mins(S.sf)&&m<=mins(S.st)&&(m-mins(S.sf))%60===0)due.push('show');
+    due.forEach(k=>{const key=day+m+k;if(!fired.has(key)){fired.add(key);queueAnn(k)}});
+  }
+  const want=override?override==='play':sched;
+  if(armed){
+    if(want&&au.paused)setSrc(true,true);
+    if(!want&&!au.paused)fadeStop();
+  }
+  const playing=!au.paused;
+  if(playing!==wasP){wasP=playing;if(armed)log(playing?'Musica avviata':'Musica in pausa')}
+  if(armed&&want&&playing&&!annBusy){if(au.currentTime===lastT)stall+=2;else{stall=0;lastT=au.currentTime}
+    if(stall>=20){stall=0;log('Audio bloccato: riavvio');au.dataset.id='';setSrc(true)}}else stall=0;
+  if(ac&&armed&&ac.state!=='running')ac.resume().catch(()=>{});
+  $('nxa').textContent=nextAnn();
+  {const dt=secT-Date.now();$('secst').textContent=!S.sec?'🔓 Antifurto disattivo':!armed?'In attesa di “Attiva”':alarmOn?'🚨 Allarme in corso':dt>0?`⏳ Si arma tra ${Math.ceil(dt/1000)}s: allontanati`:Date.now()-lastMo>3000?'⚠ Sensori di movimento non disponibili':'🔒 Armato'}
+  if(armed&&S.dim>0&&!svOn&&Date.now()-idleT>S.dim*60000)sv(true);
+  if(svOn){$('svc').textContent=$('clock').textContent;$('svs').textContent=$('status').textContent;
+    if(now.getMinutes()!==lastMin){lastMin=now.getMinutes();$('svc').style.transform=`translate(${Math.random()*120-60}px,${Math.random()*160-80}px)`}}
+  $('status').textContent=!armed?'⚠ Non attivato':playing?'🎵 In riproduzione':want?'In attesa…':'⏸ In pausa';
+  $('status').style.color=playing?'var(--ac)':'var(--tx)';
+  $('next').textContent=!armed?'Tocca “Attiva”':want?`Si ferma alle ${S.end}`:`Riparte ${nextStart()}`;
+  $('warn').style.display=armed&&want&&au.paused&&blocked?'block':'none';
+}
+setInterval(tick,2000);
+
+// --- attiva: sblocca audio + schermo sempre acceso ---
+let wl=null;
+async function keepAwake(){try{wl=await navigator.wakeLock.request('screen');wl.onrelease=()=>{wl=null}}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&armed)keepAwake()});
+setInterval(()=>{if(armed&&!wl)keepAwake()},30000);
+$('arm').onclick=async()=>{
+  armed=true;log('Attivato');if(S.sec)secArm();if(S.viz&&!ac)initViz();
+  try{await document.documentElement.requestFullscreen()}catch(e){}
+  keepAwake();
+  try{localStorage.setItem('armed','1')}catch(e){}
+  $('arm').style.display='none';$('armed').style.display='block';
+  const want=override?override==='play':inWindow();
+  if(tracks.length){setSrc(false);au.play().then(()=>{blocked=false;if(!want)au.pause()}).catch(()=>{})}
+  tick();
+};
+document.addEventListener('click',()=>{if(armed&&blocked){tryPlay();tick()}});
+
+// --- comandi manuali ---
+$('bplay').onclick=()=>{override='play';setSrc(true,true);setTimeout(tick,300)};
+$('bstop').onclick=()=>{override='stop';tick()};
+$('bnext').onclick=next;
+
+// --- impostazioni ---
+$('start').value=S.start;$('end').value=S.end;$('vol').value=S.vol;au.volume=S.vol;
+$('start').onchange=e=>{S.start=e.target.value;save();tick()};
+$('end').onchange=e=>{S.end=e.target.value;save();tick()};
+$('vol').oninput=e=>{S.vol=+e.target.value;au.volume=musicVol();save()};
+$('sf').value=S.sf;$('st').value=S.st;$('avol').value=S.avol;$('duck').value=S.duck;
+$('sf').onchange=e=>{S.sf=e.target.value;save()};
+$('st').onchange=e=>{S.st=e.target.value;save()};
+$('avol').oninput=e=>{S.avol=+e.target.value;an.volume=S.avol;save()};
+$('duck').oninput=e=>{S.duck=+e.target.value;if(ducked)au.volume=musicVol();save()};
+DAYS.forEach((n,i)=>{
+  const l=document.createElement('label'),c=document.createElement('input');
+  c.type='checkbox';c.checked=S.days.includes(i);
+  c.onchange=()=>{S.days=c.checked?[...new Set([...S.days,i])]:S.days.filter(x=>x!==i);save();tick()};
+  l.append(c,' '+n);$('days').append(l);
+});
+
+load().then(tick);
+</script>
+</body>
+</html>
